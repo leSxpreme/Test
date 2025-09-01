@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Leitstellenspiel – Prototyp</title>
+  <style>
+    :root{
+      --bg:#0f172a; /* slate-900 */
+      --panel:#111827ee; /* gray-900 */
+      --muted:#94a3b8; /* slate-400 */
+      --text:#e5e7eb; /* gray-200 */
+      --accent:#22d3ee; /* cyan-400 */
+      --ok:#22c55e; /* green-500 */
+      --warn:#f59e0b; /* amber-500 */
+      --bad:#ef4444; /* red-500 */
+      --blue:#60a5fa;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:radial-gradient(1200px 600px at 70% -10%,#172554,transparent),var(--bg);color:var(--text);font:14px/1.4 system-ui,Segoe UI,Roboto,Helvetica,Arial}
+    .app{display:grid;grid-template-columns:320px 1fr 360px;grid-template-rows:auto 1fr auto;gap:10px;max-width:1400px;margin:0 auto;padding:12px;height:100%}
+    header,footer{grid-column:1/-1;background:linear-gradient(180deg,#111827,#0b1222);border:1px solid #1f2937;border-radius:16px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 10px 30px #00000055}
+    header h1{margin:0;font-size:18px;letter-spacing:.4px}
+    header .stats{display:flex;gap:14px;align-items:center}
+    .pill{background:#0b1222;border:1px solid #1f2937;border-radius:999px;padding:6px 10px;color:var(--muted)}
+    .money{color:var(--ok);font-weight:700}
+    .xp{color:var(--blue);font-weight:700}
+    .left,.right,.center{border:1px solid #1f2937;background:linear-gradient(180deg,#0d1625,#0a1321);border-radius:16px;overflow:hidden;box-shadow:inset 0 1px 0 #1f2937}
+    .left,.right{display:flex;flex-direction:column;min-height:0}
+    .section-title{padding:10px 12px;border-bottom:1px solid #1f2937;background:#0b1222cc;font-weight:600;display:flex;align-items:center;gap:8px}
+    .list{padding:10px;display:flex;flex-direction:column;gap:8px;overflow:auto}
+    .card{background:#0b1222;border:1px solid #1f2937;border-radius:12px;padding:10px;display:grid;gap:6px}
+    .row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .tag{font-size:12px;color:var(--muted)}
+    .btn{border:1px solid #1f2937;background:#0f1a2c;color:#cbd5e1;border-radius:10px;padding:6px 10px;cursor:pointer}
+    .btn:hover{filter:brightness(1.1)}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    .btn.primary{background:linear-gradient(180deg,#0ea5e9,#0284c7);border-color:#075985;color:white}
+    .btn.success{background:linear-gradient(180deg,#16a34a,#15803d);border-color:#166534;color:white}
+    .btn.warn{background:linear-gradient(180deg,#f59e0b,#d97706);border-color:#b45309;color:#1f1302}
+    .search{display:flex;gap:8px}
+    .search input{flex:1;background:#0b1222;border:1px solid #1f2937;border-radius:10px;padding:8px;color:#e5e7eb}
+    canvas#map{width:100%;height:100%;display:block;background:repeating-linear-gradient(0deg,#0a1321 0 24px,#0b1423 24px 48px),repeating-linear-gradient(90deg,#0b1423 0 24px,#0c1626 24px 48px)}
+    .legend{position:absolute;bottom:12px;left:12px;background:#0b1222dd;border:1px solid #1f2937;border-radius:10px;padding:8px;font-size:12px}
+    .center{position:relative}
+    .toast{position:fixed;top:16px;right:16px;display:flex;flex-direction:column;gap:8px;z-index:9999}
+    .toast .t{background:#0b1222;border:1px solid #1f2937;border-left:4px solid var(--accent);padding:8px 10px;border-radius:8px}
+    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .store .item{display:grid;gap:6px;border:1px dashed #334155;border-radius:12px;padding:10px}
+    .tiny{font-size:12px;color:var(--muted)}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>🚨 Leitstelle – Prototyp</h1>
+      <div class="stats">
+        <div class="pill">💰 Kasse: <span id="money" class="money">0</span></div>
+        <div class="pill">⭐ XP: <span id="xp" class="xp">0</span></div>
+        <div class="pill">📈 Level: <span id="level">1</span></div>
+        <button class="btn" id="saveBtn" title="Spielstand lokal speichern">💾 Speichern</button>
+        <button class="btn" id="resetBtn" title="Spielstand löschen">♻️ Reset</button>
+      </div>
+    </header>
+
+    <aside class="left">
+      <div class="section-title">📟 Einsätze <span class="tag" id="incidentCount"></span></div>
+      <div class="list" id="incidentList"></div>
+      <div class="section-title">🏬 Wachen & Fahrzeuge</div>
+      <div class="list" id="fleetList"></div>
+    </aside>
+
+    <main class="center">
+      <div class="section-title">🗺️ Einsatzgebiet</div>
+      <canvas id="map"></canvas>
+      <div class="legend">
+        <div>🟥 Einsatz</div>
+        <div>🟦 Fahrzeuge (fahrend)</div>
+        <div>🟩 Wachen</div>
+      </div>
+      <div class="toast" id="toast"></div>
+    </main>
+
+    <aside class="right">
+      <div class="section-title">🛒 Leitstellen-Shop</div>
+      <div class="list store" id="store">
+        <div class="item">
+          <div class="row"><strong>🚒 LF (Feuerwehr)</strong><span class="tag">Basis-Löschfahrzeug</span></div>
+          <div class="row">
+            <span>Preis: 6.000 €</span>
+            <button class="btn primary" data-buy="LF">Kaufen</button>
+          </div>
+        </div>
+        <div class="item">
+          <div class="row"><strong>🚑 RTW (Rettung)</strong><span class="tag">Rettungswagen</span></div>
+          <div class="row">
+            <span>Preis: 7.500 €</span>
+            <button class="btn primary" data-buy="RTW">Kaufen</button>
+          </div>
+        </div>
+        <div class="item">
+          <div class="row"><strong>👮 POL (Polizei)</strong><span class="tag">Streifenwagen</span></div>
+          <div class="row">
+            <span>Preis: 6.500 €</span>
+            <button class="btn primary" data-buy="POL">Kaufen</button>
+          </div>
+        </div>
+        <div class="item">
+          <div class="row"><strong>🏢 Neue Wache</strong><span class="tag">Platziere auf Karte</span></div>
+          <div class="row">
+            <span>Preis: 15.000 €</span>
+            <button class="btn warn" id="placeStationBtn">Wache setzen</button>
+          </div>
+          <div class="tiny">Tipp: Klicke anschließend auf die Karte um die Wache zu platzieren.</div>
+        </div>
+      </div>
+
+      <div class="section-title">⚙️ Filter</div>
+      <div class="list">
+        <div class="search">
+          <input id="searchInput" placeholder="Einsatz suchen (z. B. Brand)" />
+          <button class="btn" id="clearSearch">✖</button>
+        </div>
+      </div>
+    </aside>
+
+    <footer>
+      <div>v0.1 – Single-File-Prototyp • Made for you 💙</div>
+      <div class="tiny">Steuerung: Einsatz anklicken → Fahrzeuge wählen → 🚀 Alarmieren</div>
+    </footer>
+  </div>
+
+  <script>
+  // --- Utility Helpers ---
+  const rand = (a,b)=>Math.random()*(b-a)+a;
+  const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+  const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+  const fmtMoney=v=>v.toLocaleString('de-DE',{style:'currency',currency:'EUR',maximumFractionDigits:0});
+
+  // --- Game State ---
+  const state = {
+    money: 20000,
+    xp: 0,
+    level: 1,
+    incidents: [],
+    vehicles: [],
+    stations: [],
+    movingUnits: [],
+    selectedIncident: null,
+    placingStation: false,
+    tick: 0,
+  };
+
+  // --- Map Setup (simple grid plane) ---
+  const canvas = document.getElementById('map');
+  const ctx = canvas.getContext('2d');
+  const resize=()=>{canvas.width=canvas.clientWidth;canvas.height=canvas.clientHeight};
+  addEventListener('resize',resize);setTimeout(resize,0);
+
+  const world={w:2000,h:1200}; // logical world
+  const toScreen=p=>({x:p.x/world.w*canvas.width,y:p.y/world.h*canvas.height});
+  const fromScreen=p=>({x:p.x/canvas.width*world.w,y:p.y/canvas.height*world.h});
+
+  // --- Entities ---
+  const VEHICLES = {
+    LF: { name:'LF', kind:'FW', speed: 120, capacity:['FIRE'], price:6000, emoji:'🚒' },
+    RTW:{ name:'RTW',kind:'RD', speed: 130, capacity:['MED'],  price:7500, emoji:'🚑' },
+    POL:{ name:'POL',kind:'POL',speed: 140, capacity:['POL'],  price:6500, emoji:'👮' },
+  };
+
+  const MISSIONS = [
+    { title:'Mülltonnenbrand', req:{FIRE:1}, reward: 500, time: 25 },
+    { title:'Brennender PKW', req:{FIRE:1,POL:1}, reward: 900, time: 35 },
+    { title:'Ölspur klein', req:{POL:1}, reward: 300, time: 20 },
+    { title:'Bewusstlose Person', req:{MED:1}, reward: 800, time: 30 },
+    { title:'Lagerhallenbrand', req:{FIRE:3,POL:1}, reward: 3000, time: 60 },
+    { title:'Schlägerei', req:{POL:2,MED:1}, reward: 1600, time: 45 },
+  ];
+
+  function addStation(x,y){
+    const st={ id:crypto.randomUUID(), x, y, name:`Wache ${state.stations.length+1}`};
+    state.stations.push(st);
+    toast(`Neue Wache platziert: ${st.name}`);
+    // give starter vehicles to first station
+    if(state.stations.length===1){
+      addVehicle('LF',st); addVehicle('RTW',st); addVehicle('POL',st);
+    }
+    saveUI();
+  }
+
+  function addVehicle(code,station){
+    const vDef=VEHICLES[code];
+    const v={ id:crypto.randomUUID(), code, name:vDef.name, kind:vDef.kind, speed:vDef.speed, capacity:[...vDef.capacity], status:'READY', x:station.x, y:station.y, stationId:station.id, emoji:vDef.emoji };
+    state.vehicles.push(v);
+    return v;
+  }
+
+  function spawnIncident(){
+    const m = MISSIONS[Math.floor(Math.random()*MISSIONS.length)];
+    const pos={x:rand(150,world.w-150),y:rand(150,world.h-150)};
+    const inc={ id:crypto.randomUUID(), title:m.title, req:structuredClone(m.req), baseReq:structuredClone(m.req), pos, units:[], progress:0, reward:m.reward, maxTime:m.time, timer:m.time, status:'OPEN'};
+    state.incidents.push(inc);
+  }
+
+  // Spawn loop
+  setInterval(()=>{
+    if(state.incidents.length<8 && Math.random()<0.7) spawnIncident();
+  }, 3500);
+
+  // --- Dispatch Logic ---
+  function canSatisfy(inc){
+    const missing = missingReq(inc);
+    return Object.values(missing).every(v=>v<=0);
+  }
+  function missingReq(inc){
+    const miss={...inc.req};
+    inc.units.forEach(u=>{
+      u.capacity.forEach(c=>{ miss[c]=(miss[c]||0)-1; });
+    });
+    return miss;
+  }
+
+  function dispatch(inc, vehicle){
+    if(vehicle.status!=='READY') return;
+    vehicle.status='ENROUTE';
+    vehicle.target={type:'INCIDENT', id:inc.id};
+    inc.units.push(vehicle);
+    toast(`${vehicle.emoji} ${vehicle.name} alarmiert zu "${inc.title}"`);
+  }
+
+  function returnToStation(vehicle){
+    vehicle.status='RETURN';
+    vehicle.target={type:'STATION', id:vehicle.stationId};
+  }
+
+  // --- Simulation Tick ---
+  function step(dt){
+    state.tick+=dt;
+
+    // Progress incidents
+    for(const inc of state.incidents){
+      if(inc.status==='OPEN' && canSatisfy(inc)){
+        inc.status='WORKING';
+        inc.progress=0;
+      }
+      if(inc.status==='OPEN'){
+        inc.timer = clamp(inc.timer - dt, 0, inc.maxTime);
+        if(inc.timer<=0){
+          inc.status='FAILED';
+          toast(`❌ Einsatz fehlgeschlagen: ${inc.title}`);
+        }
+      }
+      if(inc.status==='WORKING'){
+        inc.progress += dt;
+        if(inc.progress>=inc.maxTime){
+          inc.status='DONE';
+          state.money += inc.reward;
+          state.xp += Math.round(inc.reward/10);
+          toast(`✅ Einsatz abgeschlossen: ${inc.title} (+${fmtMoney(inc.reward)})`);
+          inc.units.forEach(returnToStation);
+        }
+      }
+    }
+
+    // Move vehicles
+    for(const v of state.vehicles){
+      if(v.status==='ENROUTE'){
+        const inc = state.incidents.find(i=>i.id===v.target.id);
+        if(!inc){ v.status='READY'; continue; }
+        moveToward(v, inc.pos, v.speed*dt);
+        if(dist(v,inc.pos)<10){ v.status='ONSCENE'; v.x=inc.pos.x; v.y=inc.pos.y; }
+      } else if(v.status==='RETURN'){
+        const st = state.stations.find(s=>s.id===v.target.id);
+        moveToward(v, st, v.speed*dt);
+        if(dist(v,st)<10){ v.status='READY'; v.x=st.x; v.y=st.y; }
+      }
+    }
+
+    // Cleanup finished/failed incidents (keep shortly)
+    state.incidents = state.incidents.filter(i=>!(i.status==='DONE' || i.status==='FAILED') || (i._life=(i._life||2)-dt)>0);
+
+    // Level calculation
+    state.level = 1 + Math.floor(state.xp/500);
+  }
+
+  function moveToward(obj, target, maxStep){
+    const dx=target.x-obj.x, dy=target.y-obj.y; const d=Math.hypot(dx,dy);
+    if(d<=maxStep||d===0){ obj.x=target.x; obj.y=target.y; return; }
+    obj.x += dx/d*maxStep; obj.y += dy/d*maxStep;
+  }
+
+  // --- Rendering ---
+  function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    // Stations
+    for(const s of state.stations){
+      const p=toScreen(s);
+      ctx.fillStyle='#16a34a'; // green
+      ctx.beginPath(); ctx.arc(p.x,p.y,7,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#9ca3af'; ctx.fillText(s.name,p.x+10,p.y+4);
+    }
+
+    // Incidents
+    for(const i of state.incidents){
+      const p=toScreen(i.pos);
+      ctx.fillStyle = (i.status==='OPEN')?'#ef4444': (i.status==='WORKING')?'#f59e0b':'#22c55e';
+      ctx.beginPath(); ctx.arc(p.x,p.y,8,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#cbd5e1'; ctx.fillText(i.title,p.x+10,p.y+4);
+    }
+
+    // Vehicles
+    for(const v of state.vehicles){
+      const p=toScreen(v);
+      ctx.fillStyle = (v.status==='READY')?'#64748b':'#60a5fa';
+      ctx.beginPath(); ctx.arc(p.x,p.y,5,0,Math.PI*2); ctx.fill();
+    }
+  }
+
+  // --- UI Bindings ---
+  const incidentList=document.getElementById('incidentList');
+  const fleetList=document.getElementById('fleetList');
+  const moneyEl=document.getElementById('money');
+  const xpEl=document.getElementById('xp');
+  const lvlEl=document.getElementById('level');
+  const incCount=document.getElementById('incidentCount');
+  const toastBox=document.getElementById('toast');
+
+  function renderUI(){
+    moneyEl.textContent = state.money.toLocaleString('de-DE');
+    xpEl.textContent = state.xp.toLocaleString('de-DE');
+    lvlEl.textContent = state.level;
+    incCount.textContent = `(${state.incidents.length})`;
+
+    // Incidents list
+    const q = document.getElementById('searchInput').value?.toLowerCase()||'';
+    incidentList.innerHTML='';
+    state.incidents.filter(i=>i.title.toLowerCase().includes(q)).forEach(i=>{
+      const miss = missingReq(i);
+      const need = Object.entries(miss).filter(([k,v])=>v>0).map(([k,v])=>`${k}:${v}`).join(' ');
+      const wrap=document.createElement('div');wrap.className='card';
+      wrap.innerHTML=`
+        <div class="row"><strong>${i.title}</strong><span class="tag">${i.status}</span></div>
+        <div class="row"><span>Belohnung: ${fmtMoney(i.reward)}</span><span>Timer: ${Math.ceil(i.timer??0)}s</span></div>
+        <div class="row"><span>Benötigt: ${Object.entries(i.baseReq).map(([k,v])=>k+':'+v).join(' ')}</span><span class="tag">Fehlt: ${need||'—'}</span></div>
+        <div class="grid-2" data-veh></div>
+        <button class="btn success" data-go>🚀 Alarmieren</button>
+      `;
+      const vehBox=wrap.querySelector('[data-veh]');
+      // selection buttons
+      state.vehicles.forEach(v=>{
+        const b=document.createElement('button');
+        b.className='btn';
+        b.textContent=`${v.emoji} ${v.name} • ${v.status}`;
+        if(v.status!=='READY') b.disabled=true;
+        b.onclick=()=>{
+          // Toggle assign
+          if(i.units.includes(v)){
+            i.units=i.units.filter(x=>x!==v); b.textContent=`${v.emoji} ${v.name} • READY`;
+          } else {
+            i.units.push(v); b.textContent=`${v.emoji} ${v.name} ✓`;
+          }
+        };
+        vehBox.appendChild(b);
+      });
+      wrap.querySelector('[data-go]').onclick=()=>{
+        // dispatch chosen vehicles if they help
+        if(i.units.length===0){ toast('Wähle Fahrzeuge aus.'); return; }
+        i.units.forEach(v=>dispatch(i,v));
+      };
+      incidentList.appendChild(wrap);
+    });
+
+    // Fleet list grouped by station
+    fleetList.innerHTML='';
+    for(const st of state.stations){
+      const box=document.createElement('div'); box.className='card';
+      const vs=state.vehicles.filter(v=>v.stationId===st.id);
+      box.innerHTML=`<div class="row"><strong>${st.name}</strong><span class="tag">${vs.length} Fahrzeuge</span></div>`;
+      vs.forEach(v=>{
+        const r=document.createElement('div'); r.className='row';
+        r.innerHTML=`<span>${v.emoji} ${v.name}</span><span class="tag">${v.status}</span>`;
+        box.appendChild(r);
+      });
+      fleetList.appendChild(box);
+    }
+  }
+
+  // --- Store / Buy ---
+  document.querySelectorAll('[data-buy]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const code=btn.dataset.buy;
+      const price=VEHICLES[code].price;
+      if(state.money<price){ toast('Zu wenig Geld.'); return; }
+      const st=state.stations[0]||null;
+      if(!st){ toast('Platziere zuerst eine Wache.'); return; }
+      state.money-=price;
+      addVehicle(code,st);
+      toast(`Gekauft: ${VEHICLES[code].name} für ${fmtMoney(price)}`);
+      saveUI();
+    });
+  });
+
+  const placeStationBtn=document.getElementById('placeStationBtn');
+  placeStationBtn.onclick=()=>{
+    if(state.money<15000){ toast('Nicht genug Geld für eine neue Wache.'); return; }
+    state.placingStation=true; toast('Klicke auf die Karte, um die Wache zu setzen.');
+  };
+  canvas.addEventListener('click',e=>{
+    if(!state.placingStation) return;
+    const r=canvas.getBoundingClientRect();
+    const p=fromScreen({x:e.clientX-r.left,y:e.clientY-r.top});
+    addStation(p.x,p.y); state.money-=15000; state.placingStation=false; saveUI();
+  });
+
+  // Search
+  document.getElementById('searchInput').addEventListener('input',renderUI);
+  document.getElementById('clearSearch').onclick=()=>{document.getElementById('searchInput').value='';renderUI();};
+
+  // Save/Load
+  function save(){ localStorage.setItem('leitstelleSave', JSON.stringify({
+    money:state.money,xp:state.xp,level:state.level,
+    stations:state.stations, vehicles:state.vehicles
+  })); }
+  function load(){ const s=localStorage.getItem('leitstelleSave'); if(!s){ seed(); return; } try{
+    const d=JSON.parse(s);
+    state.money=d.money; state.xp=d.xp; state.level=d.level;
+    state.stations=d.stations||[]; state.vehicles=d.vehicles||[];
+    if(state.stations.length===0) seed();
+  }catch{ seed(); }}
+  function seed(){
+    // initial station middle-left
+    addStation(world.w*0.25, world.h*0.5);
+  }
+  function saveUI(){ save(); renderUI(); }
+  document.getElementById('saveBtn').onclick=()=>{ save(); toast('Spielstand gespeichert.'); };
+  document.getElementById('resetBtn').onclick=()=>{ if(confirm('Wirklich zurücksetzen?')){ localStorage.removeItem('leitstelleSave'); location.reload(); } };
+
+  // Toasts
+  function toast(msg){
+    const el=document.createElement('div'); el.className='t'; el.textContent=msg; toastBox.appendChild(el);
+    setTimeout(()=>{ el.remove(); }, 3200);
+  }
+
+  // --- Main Loop ---
+  let last=performance.now();
+  function loop(now){
+    const dt = Math.min(0.05, (now-last)/1000); last=now;
+    step(dt);
+    draw();
+    renderUI();
+    requestAnimationFrame(loop);
+  }
+
+  // Start
+  load();
+  requestAnimationFrame(loop);
+
+  </script>
+</body>
+</html>
